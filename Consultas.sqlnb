@@ -1,0 +1,218 @@
+cells:
+  - kind: 1
+    value: "# Consulta 3: Clientes sin Movimientos en 90 Días (Subconsulta
+      Correlacionada)"
+    languageId: markdown
+  - kind: 2
+    value: >
+      -- C-03: Clientes sin movimientos en los últimos 90 días
+
+      -- Usando subconsulta correlacionada con NOT EXISTS
+
+      SELECT 
+          c.cliente_id,
+          c.cedula,
+          c.nombre || ' ' || c.apellido AS cliente_nombre,
+          c.email,
+          c.telefono,
+          c.fecha_registro,
+          (SELECT MAX(t.fecha) 
+           FROM TRANSACCION t 
+           JOIN CUENTA cu ON t.cuenta_id = cu.cuenta_id 
+           WHERE cu.cliente_id = c.cliente_id) AS ultima_transaccion,
+          TRUNC(SYSDATE) - (SELECT MAX(t.fecha) 
+                            FROM TRANSACCION t 
+                            JOIN CUENTA cu ON t.cuenta_id = cu.cuenta_id 
+                            WHERE cu.cliente_id = c.cliente_id) AS dias_sin_movimiento
+      FROM CLIENTE c
+
+      WHERE c.estado = 'ACTIVO'
+        AND NOT EXISTS (
+            SELECT 1
+            FROM TRANSACCION t
+            JOIN CUENTA cu ON t.cuenta_id = cu.cuenta_id
+            WHERE cu.cliente_id = c.cliente_id
+              AND t.fecha >= SYSDATE - 90
+        )
+      ORDER BY dias_sin_movimiento DESC;
+    languageId: oracle-sql
+  - kind: 1
+    value: "## Mejora de sentencia"
+    languageId: markdown
+  - kind: 2
+    value: |-
+      -- Reescribir con CTE para evitar subconsulta correlacionada repetida
+      -- Índice adicional para fecha de transacción
+      CREATE INDEX idx_transaccion_fecha ON TRANSACCION(fecha, cuenta_id);
+    languageId: oracle-sql
+  - kind: 2
+    value: |-
+      WITH ultimas_transacciones AS (
+          SELECT 
+              cu.cliente_id,
+              MAX(t.fecha) AS ultima_fecha
+          FROM CUENTA cu
+          LEFT JOIN TRANSACCION t ON cu.cuenta_id = t.cuenta_id
+          GROUP BY cu.cliente_id
+      )
+      SELECT 
+          c.cliente_id,
+          c.cedula,
+          c.nombre || ' ' || c.apellido AS cliente_nombre,
+          c.email,
+          c.telefono,
+          ut.ultima_fecha AS ultima_transaccion,
+          CASE 
+              WHEN ut.ultima_fecha IS NULL THEN NULL
+              ELSE TRUNC(SYSDATE) - ut.ultima_fecha
+          END AS dias_sin_movimiento
+      FROM CLIENTE c
+      LEFT JOIN ultimas_transacciones ut 
+             ON c.cliente_id = ut.cliente_id
+      WHERE c.estado = 'ACTIVO'
+        AND (ut.ultima_fecha IS NULL OR ut.ultima_fecha < SYSDATE - 90)
+      ORDER BY dias_sin_movimiento DESC;
+    languageId: oracle-sql
+  - kind: 1
+    value: "# Consulta 7"
+    languageId: markdown
+  - kind: 2
+    value: >-
+      -- C-07: Captaciones vs colocaciones por mes con PIVOT
+
+      WITH movimientos_mensuales AS (
+          SELECT 
+              TO_CHAR(t.fecha, 'YYYY-MM') AS mes,
+              'CAPTACIONES' AS tipo,
+              SUM(CASE WHEN t.tipo = 'DEPOSITO' THEN t.monto ELSE 0 END) AS monto
+          FROM TRANSACCION t
+          WHERE t.tipo = 'DEPOSITO'
+            AND t.fecha >= ADD_MONTHS(SYSDATE, -12)
+          GROUP BY TO_CHAR(t.fecha, 'YYYY-MM')
+          
+          UNION ALL
+          
+          SELECT 
+              TO_CHAR(p.fecha_desembolso, 'YYYY-MM') AS mes,
+              'COLOCACIONES' AS tipo,
+              SUM(p.monto) AS monto
+          FROM PRESTAMO p
+          WHERE p.estado IN ('DESEMBOLSADO', 'CANCELADO')
+            AND p.fecha_desembolso >= ADD_MONTHS(SYSDATE, -12)
+          GROUP BY TO_CHAR(p.fecha_desembolso, 'YYYY-MM')
+      )
+
+      SELECT *
+
+      FROM movimientos_mensuales
+
+      PIVOT (
+          SUM(monto) FOR tipo IN ('CAPTACIONES' AS captaciones, 'COLOCACIONES' AS colocaciones)
+      )
+
+      ORDER BY mes;
+    languageId: oracle-sql
+  - kind: 1
+    value: "# Index mejora"
+    languageId: markdown
+  - kind: 2
+    value: >-
+      -- Índice para filtrar transacciones por fecha y tipo
+
+      CREATE INDEX idx_transaccion_fecha_tipo ON TRANSACCION(fecha, tipo,
+      monto);
+
+
+      -- Índice para filtrar préstamos por fecha de desembolso
+
+      CREATE INDEX idx_prestamo_fecha_desembolso ON PRESTAMO(fecha_desembolso,
+      estado, monto);
+
+
+      -- Índice para acelerar GROUP BY por mes
+
+      CREATE INDEX idx_transaccion_mes ON TRANSACCION(TO_CHAR(fecha, 'YYYY-MM'),
+      tipo);
+    languageId: oracle-sql
+  - kind: 2
+    value: |-
+      DROP INDEX idx_transaccion_fecha_tipo;
+      DROP INDEX idx_prestamo_fecha_desembolso;
+      DROP INDEX idx_transaccion_mes;
+    languageId: oracle-sql
+  - kind: 1
+    value: "# Consulta 11"
+    languageId: markdown
+  - kind: 2
+    value: >-
+      -- C-11: Análisis CUBE de cartera vencida
+
+      SELECT 
+          COALESCE(cp.nombre, '** TOTAL **') AS producto,
+          COALESCE(s.nombre, '** TOTAL **') AS sucursal,
+          COALESCE(TO_CHAR(cu.fecha_vencimiento, 'YYYY-MM'), '** TOTAL **') AS mes_vencimiento,
+          COUNT(*) AS cuotas_vencidas,
+          SUM(cu.monto) AS monto_vencido,
+          SUM(cu.mora_dias) AS dias_mora_acumulados,
+          ROUND(AVG(cu.mora_dias), 1) AS mora_promedio_dias,
+          GROUPING(cp.nombre) AS g_producto,
+          GROUPING(s.nombre) AS g_sucursal,
+          GROUPING(TO_CHAR(cu.fecha_vencimiento, 'YYYY-MM')) AS g_mes
+      FROM CUOTA cu
+
+      JOIN PRESTAMO p ON cu.prestamo_id = p.prestamo_id
+
+      JOIN CUENTA_PRODUCTO cp ON p.producto_id = cp.producto_id
+
+      JOIN CLIENTE c ON p.cliente_id = c.cliente_id
+
+      JOIN SUCURSAL s ON c.sucursal_id = s.sucursal_id
+
+      WHERE cu.estado = 'VENCIDA'
+
+      GROUP BY CUBE(cp.nombre, s.nombre, TO_CHAR(cu.fecha_vencimiento,
+      'YYYY-MM'))
+
+      HAVING GROUPING_ID(cp.nombre, s.nombre, TO_CHAR(cu.fecha_vencimiento,
+      'YYYY-MM')) IN (0, 1, 2, 4, 3, 5, 6)
+
+      ORDER BY g_producto, producto, g_sucursal, sucursal, g_mes,
+      mes_vencimiento;
+    languageId: oracle-sql
+  - kind: 2
+    value: |-
+      SELECT *
+      FROM cliente;
+    languageId: oracle-sql
+  - kind: 2
+    value: |-
+      UPDATE cliente
+      SET sucursal_id = 1
+      WHERE cliente_id = 3;
+
+      COMMIT;
+    languageId: oracle-sql
+  - kind: 2
+    value: >-
+      -- Índice para filtrar cuotas vencidas
+
+      CREATE INDEX idx_cuota_estado_vencimiento ON CUOTA(estado,
+      fecha_vencimiento, prestamo_id, monto, mora_dias);
+
+
+      -- Índice para JOIN prestamo-producto
+
+      CREATE INDEX idx_prestamo_producto ON PRESTAMO(prestamo_id, producto_id,
+      cliente_id);
+
+
+      -- Índice para JOIN cliente-sucursal
+
+      CREATE INDEX idx_cliente_sucursal ON CLIENTE(cliente_id, sucursal_id);
+    languageId: oracle-sql
+  - kind: 2
+    value: |-
+      SELECT table_name
+      FROM user_tables
+      ORDER BY table_name;
+    languageId: oracle-sql
