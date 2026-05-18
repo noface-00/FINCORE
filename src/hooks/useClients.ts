@@ -48,7 +48,7 @@ export function useClients() {
   const removeClient = async (id: number) => {
     try {
       await deleteClient(id);
-      setClientes((prev) => prev.filter((c) => c.id !== id));
+      setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, estado: "suspendido" } : c)));
     } catch (err: any) {
       throw new Error(err?.response?.data?.message || "Error al eliminar el cliente");
     }

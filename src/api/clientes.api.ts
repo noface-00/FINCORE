@@ -50,7 +50,7 @@ const mapToFrontend = (c: any): Cliente => {
     correo: c.email || c.correo || "",
     direccion: c.direccion || "",
     sucursal_id: c.sucursal_id || 1,
-    estado: rawEstado === "activo" || rawEstado === "activa" ? "activo" : "inactivo",
+    estado: rawEstado === "activo" || rawEstado === "activa" ? "activo" : (rawEstado === "suspendido" ? "suspendido" : "inactivo"),
   };
 };
 
@@ -61,7 +61,7 @@ const toEstadoUp = (estado?: string) =>
 
 export const getClients = async (): Promise<Cliente[]> => {
   try {
-    const response = await api.get<any>("/cliente/listar");
+    const response = await api.get<any>("/cliente/listar?limit=1000");
     const rawList = Array.isArray(response.data)
       ? response.data
       : response.data?.data || response.data?.items || [];
@@ -75,9 +75,28 @@ export const getClients = async (): Promise<Cliente[]> => {
 };
 
 export const getClientById = async (id: number): Promise<Cliente> => {
-  const found = mockClientes.find((c) => c.id === id);
-  if (found) return found;
-  throw new Error(`Cliente ${id} no encontrado`);
+  if (isDemoMode()) {
+    const found = mockClientes.find((c) => c.id === id);
+    if (found) return found;
+    throw new Error(`Cliente ${id} no encontrado`);
+  }
+
+  try {
+    const response = await api.get<any>(`/cliente/listar/${id}`);
+    const rawData = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data?.data?.[0] || response.data?.items?.[0] || response.data;
+
+    if (rawData && Object.keys(rawData).length > 0) {
+      return mapToFrontend(rawData);
+    }
+    throw new Error(`Cliente ${id} no encontrado en ORDS`);
+  } catch (err: any) {
+    // Fallback to mock store if not found or network error
+    const found = mockClientes.find((c) => c.id === id);
+    if (found) return found;
+    throw new Error(`Cliente ${id} no encontrado`);
+  }
 };
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
@@ -91,7 +110,6 @@ export const createClient = async (cliente: Cliente): Promise<Cliente> => {
 
   try {
     const payload = {
-      access_token: getToken(),
       sucursal_id: cliente.sucursal_id || 1,
       cedula: cliente.cedula,
       nombre: cliente.nombres,
@@ -132,20 +150,26 @@ export const updateClient = async (id: number, cliente: Cliente): Promise<Client
 
   try {
     const payload = {
-      access_token: getToken(),
+      sucursal_id: cliente.sucursal_id || 1,
+      cedula: cliente.cedula,
       nombre: cliente.nombres,
       apellido: cliente.apellidos,
-      telefono: cliente.telefono,
       direccion: cliente.direccion,
+      telefono: cliente.telefono,
+      email: cliente.correo,
       estado: toEstadoUp(cliente.estado),
     };
     const response = await api.put<any>(`/cliente/actualizar/${id}`, payload);
     const rawData = response.data?.data || response.data || {};
-    if (rawData && Object.keys(rawData).length > 0) {
+    
+    // Only map response if it actually contains the updated client record
+    if (rawData && (rawData.cliente_id || rawData.id)) {
       const mapped = mapToFrontend(rawData);
       if (idx !== -1) mockClientes[idx] = mapped;
       return mapped;
     }
+    
+    // Otherwise, ORDS probably just returned a success message, so return our optimistically updated object
     return updated;
   } catch (err: any) {
     console.warn(`[FinCore] updateClient ORDS error (${err?.response?.status ?? "net"}):`, err?.response?.data?.message ?? err?.message);
@@ -156,9 +180,9 @@ export const updateClient = async (id: number, cliente: Cliente): Promise<Client
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 export const deleteClient = async (id: number): Promise<void> => {
-  // Always remove from in-memory store immediately
+  // Change state to suspendido in memory instead of removing it
   const idx = mockClientes.findIndex((c) => c.id === id);
-  if (idx !== -1) mockClientes.splice(idx, 1);
+  if (idx !== -1) mockClientes[idx].estado = "suspendido";
 
   if (isDemoMode()) return;
 
