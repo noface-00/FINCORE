@@ -55,7 +55,10 @@ let _nextId = 100;
 // ── NORMALIZADORES ────────────────────────────────────────────────────────────
 const mapToFrontend = (c: CuentaDTO): Cuenta => {
   const rawEstado = String(c.estado ?? c.status ?? "activa").toLowerCase();
-  const isActiva = rawEstado === "activa" || rawEstado === "active" || rawEstado === "1" || rawEstado === "true";
+  
+  let estadoFinal = "inactiva";
+  if (rawEstado === "activa" || rawEstado === "active" || rawEstado === "1" || rawEstado === "true") estadoFinal = "activa";
+  else if (rawEstado === "congelada" || rawEstado === "congelado" || rawEstado === "conjelada" || rawEstado === "bloqueada") estadoFinal = "congelada";
 
   let tipo: "Ahorro" | "Corriente" = "Ahorro";
   const tipoCuenta = String(c.tipo ?? c.tipo_cuenta ?? c.nombre_producto ?? "").toLowerCase();
@@ -68,12 +71,16 @@ const mapToFrontend = (c: CuentaDTO): Cuenta => {
     cliente_id: c.cliente_id ?? c.id_cliente ?? 1,
     tipo,
     saldo: Number(c.saldo ?? c.saldo_disponible ?? c.saldo_actual ?? 0),
-    estado: isActiva ? "activa" : "inactiva",
+    estado: estadoFinal,
   };
 };
 
-const toEstadoUp = (estado?: string) =>
-  String(estado || "activa").toLowerCase() === "activa" ? "ACTIVA" : "INACTIVA";
+const toEstadoUp = (estado?: string) => {
+  const raw = String(estado || "activa").toLowerCase();
+  if (raw === "activa" || raw === "active" || raw === "1" || raw === "true") return "ACTIVA";
+  if (raw === "congelada" || raw === "congelado" || raw === "conjelada" || raw === "bloqueada") return "BLOQUEADA"; // Tu BD usa BLOQUEADA
+  return "INACTIVA";
+};
 
 // ── API: READ ─────────────────────────────────────────────────────────────────
 
@@ -179,11 +186,24 @@ export const updateAccount = async (id: number, cuenta: Cuenta): Promise<Cuenta>
   }
 
   try {
+    const prodId = String(cuenta.tipo || "").toLowerCase() === "corriente" ? 2 : 1;
+
     const payload = {
+      cliente_id: cuenta.cliente_id,
+      producto_id: prodId,
+      sucursal_id: 1, // ORDS usualmente requiere esto si no permite nulls
+      numero_cuenta: cuenta.numero_cuenta,
       saldo: Number(cuenta.saldo),
       estado: toEstadoUp(cuenta.estado)
     };
-    await api.put<any>(`/cuenta/actualizar/${id}`, payload);
+    
+    const response = await api.put<any>(`/cuenta/actualizar/${id}`, payload);
+
+    // ORDS a veces devuelve HTTP 200 pero con un status de error interno (ej. 555 o 404)
+    const responseStatus = response.data?.status || response.data?.status_code;
+    if (responseStatus && responseStatus !== 200) {
+      throw new Error(`La base de datos rechazó la actualización (status: ${responseStatus})`);
+    }
 
     const idx = mockCuentas.findIndex((c) => c.id === id);
     if (idx !== -1) mockCuentas[idx] = updated;

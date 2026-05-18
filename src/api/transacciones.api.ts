@@ -1,25 +1,31 @@
-// src/api/transacciones.api.ts
 import api from "./axios";
+import axios from "axios";
 import { Transaccion } from "../types";
 
 const getToken = () => localStorage.getItem("accessToken") || "";
+const ORDS_BASE_URL = import.meta.env.DEV
+  ? ""
+  : import.meta.env.VITE_ORDS_BASE_URL || "http://100.100.129.101:8080";
+// Create a clean instance to avoid injecting the Authorization header,
+// which causes CORS preflight failures on transacciones endpoints.
+const cleanApi = axios.create({ baseURL: `${ORDS_BASE_URL}/ords/fincore` });
 
 // ─── Mock store ───────────────────────────────────────────────────────────────
 let mockTransacciones: Transaccion[] = [
-  { id: 1, cuenta_id: 1, tipo: "Deposito",      monto: 500,  fecha: "2026-05-16", descripcion: "Deposito inicial",      estado: "completada" },
-  { id: 2, cuenta_id: 1, tipo: "Retiro",        monto: 200,  fecha: "2026-05-16", descripcion: "Retiro cajero",         estado: "completada" },
-  { id: 3, cuenta_id: 1, tipo: "Transferencia", monto: 300,  fecha: "2026-05-15", descripcion: "Transferencia interna", estado: "completada" },
-  { id: 4, cuenta_id: 2, tipo: "Deposito",      monto: 1000, fecha: "2026-05-14", descripcion: "Deposito en línea",     estado: "completada" },
-  { id: 5, cuenta_id: 2, tipo: "Retiro",        monto: 150,  fecha: "2026-05-13", descripcion: "Retiro ATM",            estado: "completada" },
+  { id: 1, cuenta_id: 1, tipo: "Deposito", monto: 500, fecha: "2026-05-16", descripcion: "Deposito inicial", estado: "completada" },
+  { id: 2, cuenta_id: 1, tipo: "Retiro", monto: 200, fecha: "2026-05-16", descripcion: "Retiro cajero", estado: "completada" },
+  { id: 3, cuenta_id: 1, tipo: "Transferencia", monto: 300, fecha: "2026-05-15", descripcion: "Transferencia interna", estado: "completada" },
+  { id: 4, cuenta_id: 2, tipo: "Deposito", monto: 1000, fecha: "2026-05-14", descripcion: "Deposito en línea", estado: "completada" },
+  { id: 5, cuenta_id: 2, tipo: "Retiro", monto: 150, fecha: "2026-05-13", descripcion: "Retiro ATM", estado: "completada" },
 ];
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 const mapToFrontend = (t: any): Transaccion => {
   const rawTipo = String(t.tipo || "DEPOSITO").toUpperCase();
   const tipo =
-    rawTipo === "RETIRO"         ? "Retiro" :
-    rawTipo === "TRANSFERENCIA"  ? "Transferencia" :
-    "Deposito";
+    rawTipo.includes("RETIRO") ? "Retiro" :
+      rawTipo.includes("TRANSFER") ? "Transferencia" :
+        "Deposito";
 
   return {
     id: t.transaccion_id || t.id,
@@ -41,12 +47,11 @@ const mapToFrontend = (t: any): Transaccion => {
  *   • any other shape → []
  */
 const extractList = (d: any): any[] => {
-  if (Array.isArray(d))                      return d;
-  if (Array.isArray(d?.data?.transacciones)) return d.data.transacciones;
-  if (Array.isArray(d?.data))                return d.data;
-  if (Array.isArray(d?.items))               return d.items;
-  if (Array.isArray(d?.transacciones))       return d.transacciones;
-  if (Array.isArray(d?.movimientos))         return d.movimientos;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d?.items)) return d.items;
+  if (Array.isArray(d?.transacciones)) return d.transacciones;
+  if (Array.isArray(d?.movimientos)) return d.movimientos;
   return [];
 };
 
@@ -54,15 +59,15 @@ const extractList = (d: any): any[] => {
 export const getTransactions = async (daysBack = 90): Promise<Transaccion[]> => {
   // Build dynamic date range so ORDS returns results
   const now = new Date();
-  const fechaFin   = now.toISOString().split("T")[0];
+  const fechaFin = now.toISOString().split("T")[0];
   const fechaInicio = new Date(now.setDate(now.getDate() - daysBack))
     .toISOString().split("T")[0];
 
   try {
-    const response = await api.post<any>("/transacciones/listar", {
+    const response = await cleanApi.post<any>("/transacciones/listar", {
       access_token: getToken(),
       page: 1,
-      limit: 200,
+      limit: 1000,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
     });
@@ -88,10 +93,8 @@ export const getAccountTransactions = async (
   limit = 50
 ): Promise<Transaccion[]> => {
   try {
-    const response = await api.post<any>(`/transacciones/${idCuenta}`, {
+    const response = await api.post<any>(`/transacciones/cuenta/${idCuenta}`, {
       access_token: getToken(),
-      page,
-      limit,
     });
 
     const rawList = extractList(response.data);
@@ -114,10 +117,10 @@ export const deposit = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/deposito", {
       access_token: getToken(),
       tipo: "DEPOSITO",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Deposito ventanilla",
       cuenta_id: payload.cuenta_id,
     });
@@ -146,10 +149,10 @@ export const withdraw = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/retiro", {
       access_token: getToken(),
       tipo: "RETIRO",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Retiro cajero",
       cuenta_id: payload.cuenta_id,
     });
@@ -179,10 +182,10 @@ export const transfer = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/transferencia", {
       access_token: getToken(),
       tipo: "TRANSFERENCIA",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Transferencia interna",
       cuenta_origen_id: payload.cuenta_origen_id,
       cuenta_destino_id: payload.cuenta_destino_id,
