@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { DataTable } from '../../components/shared/DataTable';
 import { Transaccion } from '../../types';
 import { StatusBadge } from '../../components/shared/StatusBadge';
-import { ArrowUpRight, ArrowDownLeft, Search, RefreshCw, Layers } from 'lucide-react';
-import { getAccountTransactions } from '../../api/transacciones.api';
+import { ArrowUpRight, ArrowDownLeft, Search, RefreshCw, Layers, Trash2, Check, Plus } from 'lucide-react';
+import { getBancoTransactions, deleteBancoTransaction, updateBancoTransactionStatus, createBancoTransaction } from '../../api/banco.api';
 
 const mockBancoTransacciones: Transaccion[] = [
   {
@@ -55,12 +55,58 @@ export function BancoPage() {
 
     setLoading(true);
     try {
-      // Call new RESTful endpoint: POST /banco/cuentas/{id_cuenta}/transacciones
-      const data = await getAccountTransactions(parsedId);
+      // Call new RESTful endpoint: GET /banco/cuentas/{id_cuenta}/transacciones
+      const data = await getBancoTransactions(parsedId);
       setTransacciones(data);
     } catch (err: any) {
       setError(err?.message || 'Error al obtener transacciones de la cuenta');
       setTransacciones([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('¿Seguro que desea eliminar esta transacción?')) return;
+    try {
+      await deleteBancoTransaction(id);
+      setTransacciones(prev => prev.filter(t => t.id !== id));
+    } catch (err: any) {
+      setError(err?.message || 'Error al eliminar la transacción');
+    }
+  };
+
+  const handleUpdateStatus = async (id: number, newStatus: string) => {
+    try {
+      await updateBancoTransactionStatus(id, newStatus);
+      setTransacciones(prev => prev.map(t => t.id === id ? { ...t, estado: newStatus.toLowerCase() } : t));
+    } catch (err: any) {
+      setError(err?.message || 'Error al actualizar el estado');
+    }
+  };
+
+  const handleCreate = async (tipo: 'DEPOSITO' | 'RETIRO') => {
+    const parsedId = parseInt(cuentaId.trim());
+    if (isNaN(parsedId)) {
+      setError('Ingrese un ID de cuenta válido para crear una transacción');
+      return;
+    }
+    const montoStr = window.prompt(`Ingrese el monto para el ${tipo}:`);
+    if (!montoStr) return;
+    const monto = parseFloat(montoStr);
+    if (isNaN(monto) || monto <= 0) {
+      setError('Monto inválido');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      await createBancoTransaction(parsedId, tipo, monto);
+      // Refetch
+      const data = await getBancoTransactions(parsedId);
+      setTransacciones(data);
+    } catch (err: any) {
+      setError(err?.message || 'Error al crear transacción');
     } finally {
       setLoading(false);
     }
@@ -109,6 +155,22 @@ export function BancoPage() {
       header: 'Estado',
       render: (val: string) => (
         <StatusBadge status={val as any} />
+      ),
+    },
+    {
+      key: 'id' as const,
+      header: 'Acciones',
+      render: (val: number, row: Transaccion) => (
+        <div className="flex items-center gap-2">
+          {row.estado?.toLowerCase() !== 'completada' && (
+            <button onClick={() => handleUpdateStatus(val, 'COMPLETADA')} className="p-1.5 text-[#10B981] hover:bg-[#10B981]/10 rounded-lg transition-colors" title="Marcar como Completada">
+              <Check size={16} />
+            </button>
+          )}
+          <button onClick={() => handleDelete(val)} className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-colors" title="Eliminar">
+            <Trash2 size={16} />
+          </button>
+        </div>
       ),
     },
   ];
@@ -183,6 +245,19 @@ export function BancoPage() {
         {error && (
           <div className="p-3 mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg font-mono">
             ⚠️ {error}
+          </div>
+        )}
+
+        {/* Actions for current account */}
+        {cuentaId && !isNaN(parseInt(cuentaId)) && (
+          <div className="mt-4 flex items-center gap-3 pt-4 border-t border-[#334155]">
+            <span className="text-sm text-[#94A3B8]">Acciones Rápidas:</span>
+            <button type="button" onClick={() => handleCreate('DEPOSITO')} className="px-4 py-2 bg-[#10B981]/10 text-[#10B981] hover:bg-[#10B981]/20 border border-[#10B981]/30 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5">
+              <Plus size={16} /> Depósito
+            </button>
+            <button type="button" onClick={() => handleCreate('RETIRO')} className="px-4 py-2 bg-[#EF4444]/10 text-[#EF4444] hover:bg-[#EF4444]/20 border border-[#EF4444]/30 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5">
+              <Plus size={16} /> Retiro
+            </button>
           </div>
         )}
       </div>
