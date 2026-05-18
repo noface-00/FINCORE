@@ -1,8 +1,14 @@
-// src/api/transacciones.api.ts
 import api from "./axios";
+import axios from "axios";
 import { Transaccion } from "../types";
 
 const getToken = () => localStorage.getItem("accessToken") || "";
+const ORDS_BASE_URL = import.meta.env.DEV 
+  ? "" 
+  : import.meta.env.VITE_ORDS_BASE_URL || "http://100.100.129.101:8080";
+// Create a clean instance to avoid injecting the Authorization header,
+// which causes CORS preflight failures on transacciones endpoints.
+const cleanApi = axios.create({ baseURL: `${ORDS_BASE_URL}/ords/fincore` });
 
 // ─── Mock store ───────────────────────────────────────────────────────────────
 let mockTransacciones: Transaccion[] = [
@@ -17,8 +23,8 @@ let mockTransacciones: Transaccion[] = [
 const mapToFrontend = (t: any): Transaccion => {
   const rawTipo = String(t.tipo || "DEPOSITO").toUpperCase();
   const tipo =
-    rawTipo === "RETIRO"         ? "Retiro" :
-    rawTipo === "TRANSFERENCIA"  ? "Transferencia" :
+    rawTipo.includes("RETIRO")         ? "Retiro" :
+    rawTipo.includes("TRANSFER")       ? "Transferencia" :
     "Deposito";
 
   return {
@@ -42,6 +48,8 @@ const mapToFrontend = (t: any): Transaccion => {
  */
 const extractList = (d: any): any[] => {
   if (Array.isArray(d))              return d;
+  if (Array.isArray(d?.data?.transacciones)) return d.data.transacciones;
+  if (Array.isArray(d?.data?.movimientos)) return d.data.movimientos;
   if (Array.isArray(d?.data))        return d.data;
   if (Array.isArray(d?.items))       return d.items;
   if (Array.isArray(d?.transacciones)) return d.transacciones;
@@ -58,10 +66,10 @@ export const getTransactions = async (daysBack = 90): Promise<Transaccion[]> => 
     .toISOString().split("T")[0];
 
   try {
-    const response = await api.post<any>("/transacciones/listar", {
+    const response = await cleanApi.post<any>("/transacciones/listar", {
       access_token: getToken(),
       page: 1,
-      limit: 200,
+      limit: 1000,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
     });
@@ -87,10 +95,8 @@ export const getAccountTransactions = async (
   limit = 50
 ): Promise<Transaccion[]> => {
   try {
-    const response = await api.post<any>(`/transacciones/cuenta/${idCuenta}`, {
+    const response = await cleanApi.post<any>(`/transacciones/${idCuenta}`, {
       access_token: getToken(),
-      page,
-      limit,
     });
 
     const rawList = extractList(response.data);
@@ -113,10 +119,10 @@ export const deposit = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/deposito", {
       access_token: getToken(),
       tipo: "DEPOSITO",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Deposito ventanilla",
       cuenta_id: payload.cuenta_id,
     });
@@ -145,10 +151,10 @@ export const withdraw = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/retiro", {
       access_token: getToken(),
       tipo: "RETIRO",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Retiro cajero",
       cuenta_id: payload.cuenta_id,
     });
@@ -178,10 +184,10 @@ export const transfer = async (payload: {
   descripcion?: string;
 }): Promise<Transaccion> => {
   try {
-    const response = await api.post<any>("/transacciones/deposito", {
+    const response = await cleanApi.post<any>("/transacciones/transferencia", {
       access_token: getToken(),
       tipo: "TRANSFERENCIA",
-      monto: Number(payload.monto),
+      monto: Number(payload.monto).toFixed(2),
       descripcion: payload.descripcion || "Transferencia interna",
       cuenta_origen_id: payload.cuenta_origen_id,
       cuenta_destino_id: payload.cuenta_destino_id,

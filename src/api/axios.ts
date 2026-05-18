@@ -8,9 +8,9 @@ import axios from "axios";
  * In production: use VITE_ORDS_BASE_URL to point to the real server
  * (must be behind a reverse proxy with proper CORS headers configured).
  */
-const ORDS_BASE_URL =
-  import.meta.env.VITE_ORDS_BASE_URL ||
-  (import.meta.env.DEV ? "" : "http://100.100.129.101:8080");
+const ORDS_BASE_URL = import.meta.env.DEV
+  ? "" // Force proxy in development
+  : import.meta.env.VITE_ORDS_BASE_URL || "http://100.100.129.101:8080";
 
 const api = axios.create({
   baseURL: `${ORDS_BASE_URL}/ords/fincore`,
