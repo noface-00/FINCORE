@@ -41,11 +41,12 @@ const mapToFrontend = (t: any): Transaccion => {
  *   • any other shape → []
  */
 const extractList = (d: any): any[] => {
-  if (Array.isArray(d))              return d;
-  if (Array.isArray(d?.data))        return d.data;
-  if (Array.isArray(d?.items))       return d.items;
-  if (Array.isArray(d?.transacciones)) return d.transacciones;
-  if (Array.isArray(d?.movimientos)) return d.movimientos;
+  if (Array.isArray(d))                      return d;
+  if (Array.isArray(d?.data?.transacciones)) return d.data.transacciones;
+  if (Array.isArray(d?.data))                return d.data;
+  if (Array.isArray(d?.items))               return d.items;
+  if (Array.isArray(d?.transacciones))       return d.transacciones;
+  if (Array.isArray(d?.movimientos))         return d.movimientos;
   return [];
 };
 
@@ -87,7 +88,7 @@ export const getAccountTransactions = async (
   limit = 50
 ): Promise<Transaccion[]> => {
   try {
-    const response = await api.post<any>(`/transacciones/cuenta/${idCuenta}`, {
+    const response = await api.post<any>(`/transacciones/${idCuenta}`, {
       access_token: getToken(),
       page,
       limit,
@@ -98,7 +99,7 @@ export const getAccountTransactions = async (
     if (rawList.length === 0) {
       return mockTransacciones.filter((t) => t.cuenta_id === idCuenta);
     }
-    console.info(`[FinCore] /transacciones/cuenta/${idCuenta} → ${rawList.length} movimientos`);
+    console.info(`[FinCore] /transacciones/${idCuenta} → ${rawList.length} movimientos`);
     return rawList.map(mapToFrontend);
   } catch (err: any) {
     console.warn(`[FinCore] getAccountTransactions(${idCuenta}) ORDS error, using mock:`, err?.message);
@@ -121,7 +122,7 @@ export const deposit = async (payload: {
       cuenta_id: payload.cuenta_id,
     });
     const raw = extractList(response.data)[0] || response.data?.data || {};
-    if (raw && raw.id) return mapToFrontend(raw);
+    if (raw && (raw.id || raw.transaccion_id)) return mapToFrontend({ ...raw, id: raw.id || raw.transaccion_id });
   } catch (err: any) {
     console.warn("[FinCore] deposit ORDS error:", err?.message);
   }
@@ -153,7 +154,7 @@ export const withdraw = async (payload: {
       cuenta_id: payload.cuenta_id,
     });
     const raw = extractList(response.data)[0] || response.data?.data || {};
-    if (raw && raw.id) return mapToFrontend(raw);
+    if (raw && (raw.id || raw.transaccion_id)) return mapToFrontend({ ...raw, id: raw.id || raw.transaccion_id });
   } catch (err: any) {
     console.warn("[FinCore] withdraw ORDS error:", err?.message);
   }
@@ -187,7 +188,9 @@ export const transfer = async (payload: {
       cuenta_destino_id: payload.cuenta_destino_id,
     });
     const raw = extractList(response.data)[0] || response.data?.data || {};
-    if (raw && raw.id) return mapToFrontend(raw);
+    if (raw && (raw.id || raw.transaccion_id || raw.transaccion_debito_id)) {
+      return mapToFrontend({ ...raw, id: raw.id || raw.transaccion_id || raw.transaccion_debito_id });
+    }
   } catch (err: any) {
     console.warn("[FinCore] transfer ORDS error:", err?.message);
   }
