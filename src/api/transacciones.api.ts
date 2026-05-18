@@ -5,6 +5,7 @@ import { Transaccion } from "../types";
 const getToken = () => localStorage.getItem("accessToken") || "";
 const ORDS_BASE_URL = import.meta.env.DEV
   ? ""
+
   : import.meta.env.VITE_ORDS_BASE_URL || "http://100.100.129.101:8080";
 // Create a clean instance to avoid injecting the Authorization header,
 // which causes CORS preflight failures on transacciones endpoints.
@@ -23,9 +24,11 @@ let mockTransacciones: Transaccion[] = [
 const mapToFrontend = (t: any): Transaccion => {
   const rawTipo = String(t.tipo || "DEPOSITO").toUpperCase();
   const tipo =
+
     rawTipo.includes("RETIRO") ? "Retiro" :
       rawTipo.includes("TRANSFER") ? "Transferencia" :
         "Deposito";
+
 
   return {
     id: t.transaccion_id || t.id,
@@ -47,7 +50,10 @@ const mapToFrontend = (t: any): Transaccion => {
  *   • any other shape → []
  */
 const extractList = (d: any): any[] => {
+
   if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data?.transacciones)) return d.data.transacciones;
+  if (Array.isArray(d?.data?.movimientos)) return d.data.movimientos;
   if (Array.isArray(d?.data)) return d.data;
   if (Array.isArray(d?.items)) return d.items;
   if (Array.isArray(d?.transacciones)) return d.transacciones;
@@ -93,7 +99,7 @@ export const getAccountTransactions = async (
   limit = 50
 ): Promise<Transaccion[]> => {
   try {
-    const response = await api.post<any>(`/transacciones/cuenta/${idCuenta}`, {
+    const response = await cleanApi.post<any>(`/transacciones/${idCuenta}`, {
       access_token: getToken(),
     });
 
