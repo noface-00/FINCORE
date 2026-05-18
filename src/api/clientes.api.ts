@@ -30,9 +30,9 @@ const isDemoMode = (): boolean => {
 // ─── Mock store ───────────────────────────────────────────────────────────────
 
 let mockClientes: Cliente[] = [
-  { id: 1, cedula: "0102030405", nombres: "Kevin",  apellidos: "Lopez",  telefono: "0999999999", correo: "kevin@gmail.com",           direccion: "Cuenca",    sucursal_id: 1, estado: "activo" },
-  { id: 2, cedula: "0987654321", nombres: "María",  apellidos: "Gómez",  telefono: "0988888888", correo: "maria.gomez@fincore.com",   direccion: "Quito",     sucursal_id: 1, estado: "activo" },
-  { id: 3, cedula: "1726354890", nombres: "Carlos", apellidos: "Andrade",telefono: "0977777777", correo: "carlos.andrade@fincore.com",direccion: "Guayaquil", sucursal_id: 2, estado: "inactivo" },
+  { id: 1, cedula: "0102030405", nombres: "Kevin", apellidos: "Lopez", telefono: "0999999999", correo: "kevin@gmail.com", direccion: "Cuenca", sucursal_id: 1, estado: "activo" },
+  { id: 2, cedula: "0987654321", nombres: "María", apellidos: "Gómez", telefono: "0988888888", correo: "maria.gomez@fincore.com", direccion: "Quito", sucursal_id: 1, estado: "activo" },
+  { id: 3, cedula: "1726354890", nombres: "Carlos", apellidos: "Andrade", telefono: "0977777777", correo: "carlos.andrade@fincore.com", direccion: "Guayaquil", sucursal_id: 2, estado: "inactivo" },
 ];
 
 let _nextId = 100;
@@ -161,14 +161,14 @@ export const updateClient = async (id: number, cliente: Cliente): Promise<Client
     };
     const response = await api.put<any>(`/cliente/actualizar/${id}`, payload);
     const rawData = response.data?.data || response.data || {};
-    
+
     // Only map response if it actually contains the updated client record
     if (rawData && (rawData.cliente_id || rawData.id)) {
       const mapped = mapToFrontend(rawData);
       if (idx !== -1) mockClientes[idx] = mapped;
       return mapped;
     }
-    
+
     // Otherwise, ORDS probably just returned a success message, so return our optimistically updated object
     return updated;
   } catch (err: any) {
