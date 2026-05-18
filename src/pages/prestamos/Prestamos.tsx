@@ -103,7 +103,7 @@ export function PrestamosPage() {
     }
   };
 
-  const handleUpdateStatus = async (id: number, status: 'APROBADO' | 'RECHAZADO' | 'PAGADO' | 'VENCIDO') => {
+  const handleUpdateStatus = async (id: number, status: 'DESEMBOLSADO' | 'CANCELADO' | 'PAGADO' | 'VENCIDO') => {
     try {
       await updateLoan(id, { estado: status });
       const parsed = parseInt(clientId);
@@ -174,10 +174,10 @@ export function PrestamosPage() {
           {row.estado === 'Pendiente' && row.id && (
             <>
               <button
-                onClick={() => handleUpdateStatus(row.id!, 'APROBADO')}
+                onClick={() => handleUpdateStatus(row.id!, 'DESEMBOLSADO')}
                 className="fc-btn-success !px-2.5 !py-1 text-xs"
               >
-                <CheckCircle size={12} /> Aprobar
+                <CheckCircle size={12} /> Desembolsar
               </button>
               <button
                 onClick={() => handleUpdateStatus(row.id!, 'RECHAZADO')}
@@ -187,9 +187,9 @@ export function PrestamosPage() {
               </button>
             </>
           )}
-          {row.estado === 'Aprobado' && row.id && (
+          {row.estado === 'Desembolsado' && row.id && (
             <button
-              onClick={() => handleUpdateStatus(row.id!, 'PAGADO')}
+              onClick={() => handleUpdateStatus(row.id!, 'CANCELADO')}
               className="fc-btn-ghost !px-2.5 !py-1 text-xs"
             >
               <CheckCircle size={12} /> Liquidar
@@ -330,15 +330,15 @@ export function PrestamosPage() {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between mb-1">
-                <span className="text-[#94A3B8] text-sm">Riesgo Bajo (Al día / Aprobados)</span>
+                <span className="text-[#94A3B8] text-sm">Riesgo Bajo (Al día / Desembolsados)</span>
                 <span className="text-[#10B981] font-medium">
-                  {prestamos.length > 0 ? ((prestamos.filter(p => p.estado === 'Aprobado' || p.estado === 'Pagado').length / prestamos.length) * 100).toFixed(1) : '100'}%
+                  {prestamos.length > 0 ? ((prestamos.filter(p => p.estado === 'Desembolsado' || p.estado === 'Cancelado').length / prestamos.length) * 100).toFixed(1) : '100'}%
                 </span>
               </div>
               <div className="h-2 bg-[#0F172A] rounded-full overflow-hidden">
                 <div
                   className="h-full bg-[#10B981] transition-all duration-500"
-                  style={{ width: `${prestamos.length > 0 ? (prestamos.filter(p => p.estado === 'Aprobado' || p.estado === 'Pagado').length / prestamos.length) * 100 : 100}%` }}
+                  style={{ width: `${prestamos.length > 0 ? (prestamos.filter(p => p.estado === 'Desembolsado' || p.estado === 'Cancelado').length / prestamos.length) * 100 : 100}%` }}
                 />
               </div>
             </div>

@@ -26,31 +26,31 @@ let _nextId = 100;
 
 const mapToFrontend = (p: any): Prestamo => {
   const rawEstado = String(p.estado || "PENDIENTE").toUpperCase();
-  let mappedEstado: "Pendiente" | "Aprobado" | "Rechazado" | "Pagado" | "Vencido" = "Pendiente";
-  if (rawEstado === "APROBADO") mappedEstado = "Aprobado";
+  let mappedEstado: "Pendiente" | "Desembolsado" | "Cancelado" | "Rechazado" | "Vencido" = "Pendiente";
+  if (rawEstado === "DESEMBOLSADO") mappedEstado = "Desembolsado";
+  else if (rawEstado === "CANCELADO") mappedEstado = "Cancelado";
   else if (rawEstado === "RECHAZADO") mappedEstado = "Rechazado";
-  else if (rawEstado === "PAGADO") mappedEstado = "Pagado";
   else if (rawEstado === "VENCIDO") mappedEstado = "Vencido";
   return {
     id: p.prestamo_id || p.id,
     cliente_id: p.cliente_id,
     monto: Number(p.monto || 0),
-    tasa_interes: p.tasa_interes || 12,
+    tasa_interes: p.tasa_interes || 0.125,
     plazo: p.plazo_meses || p.plazo || 24,
     estado: mappedEstado,
   };
 };
 
 const toEstadoUp = (estado?: string): string => {
-  const map: Record<string, string> = { pendiente: "PENDIENTE", aprobado: "APROBADO", rechazado: "RECHAZADO", pagado: "PAGADO", vencido: "VENCIDO" };
+  const map: Record<string, string> = { pendiente: "PENDIENTE", desembolsado: "DESEMBOLSADO", cancelado: "CANCELADO", rechazado: "RECHAZADO", vencido: "VENCIDO" };
   return map[String(estado || "pendiente").toLowerCase()] || String(estado || "PENDIENTE").toUpperCase();
 };
 
-const mapEstadoFrontend = (s: string): "Pendiente" | "Aprobado" | "Rechazado" | "Pagado" | "Vencido" => {
+const mapEstadoFrontend = (s: string): "Pendiente" | "Desembolsado" | "Cancelado" | "Rechazado" | "Vencido" => {
   const up = s.toUpperCase();
-  if (up === "APROBADO") return "Aprobado";
+  if (up === "DESEMBOLSADO") return "Desembolsado";
+  if (up === "CANCELADO") return "Cancelado";
   if (up === "RECHAZADO") return "Rechazado";
-  if (up === "PAGADO") return "Pagado";
   if (up === "VENCIDO") return "Vencido";
   return "Pendiente";
 };
@@ -58,7 +58,7 @@ const mapEstadoFrontend = (s: string): "Pendiente" | "Aprobado" | "Rechazado" | 
 // ── READ ──────────────────────────────────────────────────────────────────────
 export const getLoansByClient = async (clientId: number): Promise<Prestamo[]> => {
   try {
-    const response = await api.get<any>(`/prestamo/cliente/${clientId}`);
+    const response = await api.get<any>(`/prestamo/cliente/${clientId}?limit=1000`);
     const rawList = Array.isArray(response.data) ? response.data : response.data?.data || response.data?.items || [];
     if (rawList.length === 0) return mockPrestamos.filter((p) => p.cliente_id === clientId);
     const mapped = rawList.map(mapToFrontend);
@@ -80,7 +80,14 @@ export const createLoan = async (prestamo: Prestamo): Promise<Prestamo> => {
     return newPrestamo;
   }
   try {
-    const payload = { access_token: getToken(), cliente_id: prestamo.cliente_id, empleado_id: getEmpleadoId(), producto_id: 1, monto: Number(prestamo.monto), tasa_interes: Number(prestamo.tasa_interes || 12), plazo_meses: Number(prestamo.plazo || 24) };
+    const payload = { 
+      cliente_id: String(prestamo.cliente_id), 
+      empleado_id: String(getEmpleadoId()), 
+      producto_id: "1", 
+      monto: Number(prestamo.monto).toFixed(2), 
+      tasa_interes: (Number(prestamo.tasa_interes || 12.5) / 100).toFixed(4), 
+      plazo_meses: String(prestamo.plazo || 24) 
+    };
     const response = await api.post<any>("/prestamo/crear", payload);
     const rawData = response.data?.data || response.data || {};
     if (!rawData || Object.keys(rawData).length === 0) {
@@ -107,7 +114,7 @@ export const updateLoan = async (id: number, payload: { estado: string }): Promi
   if (isDemoMode()) return;
 
   try {
-    await api.put(`/prestamo/actualizar/${id}`, { access_token: getToken(), estado: toEstadoUp(payload.estado) });
+    await api.put(`/prestamo/actualizar/${id}`, { estado: toEstadoUp(payload.estado) });
   } catch (err: any) {
     console.warn(`[FinCore] updateLoan ORDS error (${err?.response?.status ?? "net"}):`, err?.response?.data?.message ?? err?.message);
   }
