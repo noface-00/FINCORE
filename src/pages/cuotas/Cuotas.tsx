@@ -202,7 +202,7 @@ export function CuotasPage() {
           <h1 className="text-3xl font-bold text-[#F8FAFC]">Cronograma de Pagos</h1>
           <p className="text-[#94A3B8] mt-2">Gestión y Conciliación de Cuotas de Préstamos</p>
         </div>
-        
+
         <button
           onClick={() => {
             setSubmitError(null);
@@ -221,7 +221,7 @@ export function CuotasPage() {
           <Landmark size={18} className="text-[#3B82F6]" />
           Filtrar Cuotas por ID del Préstamo
         </h3>
-        
+
         <form onSubmit={handleQuery} className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1">
             <label className="block text-xs font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">ID Préstamo</label>
@@ -236,7 +236,7 @@ export function CuotasPage() {
               />
             </div>
           </div>
-          
+
           <button
             type="submit"
             disabled={loading}
@@ -297,16 +297,15 @@ export function CuotasPage() {
             {cuotas.filter(c => c.estado !== 'Pagada').slice(0, 2).map((c) => (
               <div key={c.id} className="flex justify-between items-center p-3 bg-[#0F172A] rounded-lg">
                 <span className="text-[#F8FAFC] font-medium">Cuota #{c.numero_cuota} - Préstamo #{c.prestamo_id}</span>
-                <span className={`text-xs px-2 py-1 rounded font-mono ${
-                  c.estado === 'Vencida' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-                }`}>
+                <span className={`text-xs px-2 py-1 rounded font-mono ${c.estado === 'Vencida' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                  }`}>
                   {c.estado === 'Vencida' ? 'Vencida / Reclamación' : `Vence el ${c.fecha_vencimiento}`}
                 </span>
               </div>
             ))}
             {cuotas.filter(c => c.estado !== 'Pagada').length === 0 && (
               <div className="p-4 bg-[#0F172A] text-center text-[#94A3B8] rounded-lg">
-                🎉 No hay cuotas pendientes para este préstamo. ¡Todo al día!
+                No hay cuotas pendientes para este préstamo. ¡Todo al día!
               </div>
             )}
           </div>
@@ -362,7 +361,7 @@ export function CuotasPage() {
       >
         {submitError && (
           <div className="p-3 mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg font-mono">
-            ❌ {submitError}
+            {submitError}
           </div>
         )}
         <div className="space-y-4">

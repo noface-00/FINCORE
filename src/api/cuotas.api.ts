@@ -39,7 +39,6 @@ const mapEstadoFrontend = (rawEstado: string): "Pagada" | "Pendiente" | "Vencida
   if (up === "MORA" || up === "EN_MORA") return "Mora";
   return "Pendiente";
 };
-
 // ── READ ──────────────────────────────────────────────────────────────────────
 export const getInstallmentsForLoan = async (prestamoId: number): Promise<Cuota[]> => {
   try {
@@ -57,7 +56,6 @@ export const getInstallmentsForLoan = async (prestamoId: number): Promise<Cuota[
     return mockCuotas.filter((c) => c.prestamo_id === prestamoId);
   }
 };
-
 // ── CREATE ────────────────────────────────────────────────────────────────────
 export const createInstallment = async (cuota: Cuota): Promise<Cuota> => {
   if (isDemoMode()) {
@@ -84,7 +82,6 @@ export const createInstallment = async (cuota: Cuota): Promise<Cuota> => {
     return newCuota;
   }
 };
-
 // ── UPDATE ────────────────────────────────────────────────────────────────────
 export const updateInstallment = async (id: number, payload: { estado: string; mora_dias?: number }): Promise<void> => {
   // Optimistic local update

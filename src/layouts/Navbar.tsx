@@ -52,11 +52,6 @@ export function Navbar({ onMenuClick, onLogout }: NavbarProps) {
 
           {/* Right - Actions */}
           <div className="flex items-center gap-2">
-            <button className="p-2 relative hover:bg-slate-800 rounded-lg transition-colors text-slate-300">
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-
             <button
               onClick={() => setIsDark(!isDark)}
               className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-300"
